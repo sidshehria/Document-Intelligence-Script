@@ -1,0 +1,115 @@
+{
+  "parameters": {
+    "Fiber Characteristics": [
+      "Attenuation at 1310nm",
+      "Attenuation at 1550nm",
+      "MFD at 1310nm",
+      "MFD at 1550nm",
+      "Attenuation at 1625nm",
+      "Attenuation at 850nm",
+      "Attenuation at 1300nm"
+    ],
+    "General Information": [
+      "Number Of Rip Cords",
+      "Rip Cords",
+      "Kink",
+      "Wind Speed",
+      "Max.Operating Sag",
+      "Layer Ii",
+      "Layer Ii - Rk"
+    ],
+    "Cable Construction": [
+      "Number Of Loose Tubes - Pbt"
+    ],
+    "Cable Characteristics": [
+      "Max. Tensile Strength",
+      "Max. Crush Resistance"
+    ]
+  },
+  "patterns": [
+    [
+      "(?:attenuation\\s+at\\s+)?(\\d+\\s*nm)\\s*≤?\\s*([\\d.]+\\s*dB/km)",
+      "Attenuation at 1310nm"
+    ],
+    [
+      "(?:attenuation\\s+at\\s+)?(\\d+\\s*nm)\\s*≤?\\s*([\\d.]+\\s*dB/km)",
+      "Attenuation at 1550nm"
+    ],
+    [
+      "(?:mode\\s+field\\s+diameter\\s+at\\s+|mfd\\s+at\\s+)?(\\d+\\s*nm)\\s+([\\d.±\\s]+µm)",
+      "MFD at 1310nm"
+    ],
+    [
+      "(?:mode\\s+field\\s+diameter\\s+at\\s+|mfd\\s+at\\s+)?(\\d+\\s*nm)\\s+([\\d.±\\s]+µm)",
+      "MFD at 1550nm"
+    ],
+    [
+      "(?:number\\ of\\ rip\\ cords|number\\s+of\\s+rip\\s+cords|number\\ of\\ rip\\ cords|number\\ of\\ rip\\ cords|number\\ of\\ rip\\ cords|number\\ of\\ rip\\ cords)[:\\s]*([^,\\n]+?)(?=\\s*(?:[A-Z][a-z]|$|\\n))",
+      "Number Of Rip Cords"
+    ],
+    [
+      "(?:attenuation\\s+at\\s+)?(\\d+\\s*nm)\\s*≤?\\s*([\\d.]+\\s*dB/km)",
+      "Attenuation at 1625nm"
+    ],
+    [
+      "(?:rip\\ cords|rip\\s+cords|rip\\ cords|rip\\ cords|rip\\ cords|rip\\ cords)[:\\s]*([^,\\n]+?)(?=\\s*(?:[A-Z][a-z]|$|\\n))",
+      "Rip Cords"
+    ],
+    [
+      "(?:kink|kink|kink|kink|kink|kink)[:\\s]*([^,\\n]+?)(?=\\s*(?:[A-Z][a-z]|$|\\n))",
+      "Kink"
+    ],
+    [
+      "(?:wind\\ speed|wind\\s+speed|wind\\ speed|wind\\ speed|wind\\ speed|wind\\ speed)[:\\s]*([^,\\n]+?)(?=\\s*(?:[A-Z][a-z]|$|\\n))",
+      "Wind Speed"
+    ],
+    [
+      "(?:max\\.operating\\ sag|max\\.operating\\s+sag|max\\.operating\\ sag|max\\.operating\\ sag|max\\.operating\\ sag|max\\.operating\\ sag)[:\\s]*([^,\\n]+?)(?=\\s*(?:[A-Z][a-z]|$|\\n))",
+      "Max.Operating Sag"
+    ],
+    [
+      "(?:number\\ of\\ loose\\ tubes\\ \\-\\ pbt|number\\s+of\\s+loose\\s+tubes\\s+\\-\\s+pbt|number\\ of\\ loose\\ tubes\\ \\-\\ pbt|number\\ of\\ loose\\ tubes\\ \\-\\ pbt|number\\ of\\ loose\\ tubes\\ \\-\\ pbt|number\\ of\\ loose\\ tubes\\ \\-\\ pbt)[:\\s]*([^,\\n]+?)(?=\\s*(?:[A-Z][a-z]|$|\\n))",
+      "Number Of Loose Tubes - Pbt"
+    ],
+    [
+      "(?:max\\.\\s+tensile\\s+strength)[:\\s]*([\\d.±\\s]+\\s*(?:N|kN|N/mm|N\\.m|kg))",
+      "Max. Tensile Strength"
+    ],
+    [
+      "(?:max\\.\\s+crush\\s+resistance)[:\\s]*([\\d.±\\s]+\\s*(?:N|kN|N/mm|N\\.m|kg))",
+      "Max. Crush Resistance"
+    ],
+    [
+      "(?:attenuation\\s+at\\s+)?(\\d+\\s*nm)\\s*≤?\\s*([\\d.]+\\s*dB/km)",
+      "Attenuation at 850nm"
+    ],
+    [
+      "(?:attenuation\\s+at\\s+)?(\\d+\\s*nm)\\s*≤?\\s*([\\d.]+\\s*dB/km)",
+      "Attenuation at 1300nm"
+    ],
+    [
+      "(?:layer\\ ii|layer\\s+ii|layer\\ ii|layer\\ ii|layer\\ ii|layer\\ ii)[:\\s]*([^,\\n]+?)(?=\\s*(?:[A-Z][a-z]|$|\\n))",
+      "Layer Ii"
+    ],
+    [
+      "(?:layer\\ ii\\ \\-\\ rk|layer\\s+ii\\s+\\-\\s+rk|layer\\ ii\\ \\-\\ rk|layer\\ ii\\ \\-\\ rk|layer\\ ii\\ \\-\\ rk|layer\\ ii\\ \\-\\ rk)[:\\s]*([^,\\n]+?)(?=\\s*(?:[A-Z][a-z]|$|\\n))",
+      "Layer Ii - Rk"
+    ]
+  ],
+  "section_keywords": {
+    "Fiber Characteristics": [
+      "Attenuation",
+      "MFD"
+    ],
+    "General Information": [
+      "Rip",
+      "Kink",
+      "Wind",
+      "Max.Operating",
+      "Layer"
+    ],
+    "Cable Characteristics": [
+      "Max."
+    ]
+  }
+}
