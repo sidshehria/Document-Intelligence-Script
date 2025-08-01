@@ -15,6 +15,26 @@ INPUT_FOLDER = "input_docs"
 OUTPUT_FOLDER = "output_json"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
+def clean_parameter_value(value):
+    """Clean parameter values by removing IEC standard codes and extra whitespace"""
+    if not value or not isinstance(value, str):
+        return value
+    
+    # Remove full IEC standard codes (e.g., "IEC-60794-1-21-E7")
+    cleaned = re.sub(r'\s*IEC-[\d-]+(?:-[A-Z]\d+)?\s*', '', value)
+    
+    # Remove partial IEC codes like "E3", "E4", "E7", etc. attached to values
+    cleaned = re.sub(r'([A-Z]\d+)$', '', cleaned)
+    
+    # Remove partial IEC codes like "E3", "E4", "E7", etc. when they appear alone
+    if re.match(r'^[A-Z]\d+$', cleaned.strip()):
+        return ""  # Return empty if it's just a partial IEC code
+    
+    # Clean up extra whitespace
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    
+    return cleaned
+
 def parse_color_sequence(text):
     """Parse color coding sequences and return numbered color mappings"""
     color_mapping = {}
@@ -190,25 +210,38 @@ def extract_parameters_from_text(text, detected_fiber_counts):
                     wavelength = match.group(1).strip()
                     value = match.group(2).strip()
                     dynamic_param_name = f"Attenuation at {wavelength}"
-                    final_value = f"≤ {value}"
+                    final_value = clean_parameter_value(f"≤ {value}")
                 elif 'mode field diameter' in param_name.lower():
                     wavelength = match.group(1).strip()
                     value = match.group(2).strip()
                     dynamic_param_name = f"MFD at {wavelength}"
-                    final_value = value
+                    final_value = clean_parameter_value(value)
                 elif 'chromatic dispersion' in param_name.lower():
                     wavelength_range = match.group(1).strip()
                     value = match.group(2).strip()
                     dynamic_param_name = f"Chromatic Dispersion at {wavelength_range}"
-                    final_value = f"≤ {value}"
+                    final_value = clean_parameter_value(f"≤ {value}")
                 else:
                     # Default: combine all groups
                     dynamic_param_name = param_name
-                    final_value = " ".join(match.groups()).strip()
+                    final_value = clean_parameter_value(" ".join(match.groups()).strip())
             else:
-                # Single capture group
-                dynamic_param_name = param_name
-                final_value = match.group(1).strip()
+                # Single capture group - handle environmental parameters specially
+                if 'environmental_installation' in param_name.lower() or 'installation_temp' in param_name.lower():
+                    dynamic_param_name = "Installation Temperature"
+                    final_value = clean_parameter_value(match.group(1).strip())
+                elif 'environmental_operation' in param_name.lower() or 'operation_temp' in param_name.lower():
+                    dynamic_param_name = "Operation Temperature"
+                    final_value = clean_parameter_value(match.group(1).strip())
+                elif 'environmental_storage' in param_name.lower() or 'storage_temp' in param_name.lower():
+                    dynamic_param_name = "Storage Temperature" 
+                    final_value = clean_parameter_value(match.group(1).strip())
+                elif 'tensile_strength_max' in param_name.lower():
+                    dynamic_param_name = "Max. Tensile Strength"
+                    final_value = clean_parameter_value(match.group(1).strip())
+                else:
+                    dynamic_param_name = param_name
+                    final_value = clean_parameter_value(match.group(1).strip())
             
             # Use enhanced parameter categorization
             section = ensure_parameter_exists(dynamic_param_name, final_value)
@@ -427,42 +460,54 @@ def extract_grouped_data(pdf_path):
                         # Extract other enhanced patterns
                         enhanced_param_mapping = {
                             'crush_resistance': 'Max. Crush Resistance',
-                            'impact_resistance': 'Impact Resistance', 
+                            'impact_resistance': 'Impact Resistance',
+                            'impact_strength': 'Impact Strength', 
                             'torsion': 'Torsion',
                             'minimum_bend_radius': 'Minimum Bend Radius',
-                            'water_penetration': 'Water Penetration Test'
+                            'water_penetration': 'Water Penetration Test',
+                            'tensile_strength_max': 'Max. Tensile Strength',
+                            'max_tensile_strength': 'Max. Tensile Strength'
                         }
                         
                         for pattern_key, param_name in enhanced_param_mapping.items():
                             if pattern_key in ENHANCED_TEXT_PATTERNS:
                                 match = re.search(ENHANCED_TEXT_PATTERNS[pattern_key], page_text)
                                 if match:
-                                    value = match.group(1)
+                                    value = clean_parameter_value(match.group(1))
                                     for fiber_count in detected_fiber_counts:
                                         param_section = categorize_parameter(param_name)
                                         if param_section not in fibre_data[fiber_count]["Technical_Specifications"]:
                                             fibre_data[fiber_count]["Technical_Specifications"][param_section] = {}
-                                        fibre_data[fiber_count]["Technical_Specifications"][param_section][param_name] = value
+                                        # Only add if not already present or empty
+                                        if (param_name not in fibre_data[fiber_count]["Technical_Specifications"][param_section] or
+                                            not fibre_data[fiber_count]["Technical_Specifications"][param_section][param_name]):
+                                            fibre_data[fiber_count]["Technical_Specifications"][param_section][param_name] = value
                                     add_parameter_if_new(param_name, param_section)
                         
-                        # Extract Environmental Performance temperatures
-                        temp_patterns = ['installation_temp', 'operation_temp', 'storage_temp']
-                        temp_values = {}
-                        for temp_type in temp_patterns:
+                        # Extract Environmental Performance temperatures separately
+                        temp_patterns = {
+                            'environmental_installation': 'Installation Temperature',
+                            'environmental_operation': 'Operation Temperature', 
+                            'environmental_storage': 'Storage Temperature',
+                            'installation_temp': 'Installation Temperature',
+                            'operation_temp': 'Operation Temperature',
+                            'storage_temp': 'Storage Temperature'
+                        }
+                        
+                        for temp_type, param_name in temp_patterns.items():
                             if temp_type in ENHANCED_TEXT_PATTERNS:
                                 temp_match = re.search(ENHANCED_TEXT_PATTERNS[temp_type], page_text)
                                 if temp_match:
-                                    temp_values[temp_type] = temp_match.group(1)
-                        
-                        if len(temp_values) == 3:
-                            env_value = f"Installation {temp_values['installation_temp']}\nOperation {temp_values['operation_temp']}\nStorage {temp_values['storage_temp']}"
-                            param_name = "Environmental Performance"
-                            for fiber_count in detected_fiber_counts:
-                                param_section = categorize_parameter(param_name)
-                                if param_section not in fibre_data[fiber_count]["Technical_Specifications"]:
-                                    fibre_data[fiber_count]["Technical_Specifications"][param_section] = {}
-                                fibre_data[fiber_count]["Technical_Specifications"][param_section][param_name] = env_value
-                            add_parameter_if_new(param_name, param_section)
+                                    temp_value = clean_parameter_value(temp_match.group(1))
+                                    for fiber_count in detected_fiber_counts:
+                                        param_section = categorize_parameter(param_name)
+                                        if param_section not in fibre_data[fiber_count]["Technical_Specifications"]:
+                                            fibre_data[fiber_count]["Technical_Specifications"][param_section] = {}
+                                        # Only add if not already present or empty
+                                        if (param_name not in fibre_data[fiber_count]["Technical_Specifications"][param_section] or
+                                            not fibre_data[fiber_count]["Technical_Specifications"][param_section][param_name]):
+                                            fibre_data[fiber_count]["Technical_Specifications"][param_section][param_name] = temp_value
+                                    add_parameter_if_new(param_name, param_section)
                         
                         # Extract Attenuation values with wavelengths
                         if 'attenuation' in ENHANCED_TEXT_PATTERNS:
@@ -595,7 +640,7 @@ def extract_grouped_data(pdf_path):
                                     if fiber_count in fiber_column_mappings:
                                         col_idx = fiber_column_mappings[fiber_count]
                                         if col_idx < len(cleaned) and cleaned[col_idx]:
-                                            parameter_value = cleaned[col_idx]
+                                            parameter_value = clean_parameter_value(cleaned[col_idx])
                                             # Store the value from the mapped column
                                             if fiber_count not in fiber_specific_values:
                                                 fiber_specific_values[fiber_count] = {}
@@ -624,13 +669,13 @@ def extract_grouped_data(pdf_path):
                                     if fiber_count in fiber_column_mappings:
                                         col_idx = fiber_column_mappings[fiber_count]
                                         if col_idx < len(cleaned) and cleaned[col_idx]:
-                                            parameter_value = cleaned[col_idx]
+                                            parameter_value = clean_parameter_value(cleaned[col_idx])
                                         else:
                                             # Fallback to first available value
-                                            parameter_value = cleaned[1] if len(cleaned) > 1 and cleaned[1] else ""
+                                            parameter_value = clean_parameter_value(cleaned[1]) if len(cleaned) > 1 and cleaned[1] else ""
                                     else:
                                         # No column mapping, use default logic
-                                        parameter_value = cleaned[1] if len(cleaned) > 1 and cleaned[1] else ""
+                                        parameter_value = clean_parameter_value(cleaned[1]) if len(cleaned) > 1 and cleaned[1] else ""
                                     
                                     fibre_data[fiber_count]["Technical_Specifications"][parameter_section][parameter_name] = parameter_value
                                 # Use column mappings if available
@@ -642,19 +687,19 @@ def extract_grouped_data(pdf_path):
                                     if fiber_count in fiber_column_mappings:
                                         col_idx = fiber_column_mappings[fiber_count]
                                         if col_idx < len(cleaned) and cleaned[col_idx]:
-                                            parameter_value = cleaned[col_idx]
+                                            parameter_value = clean_parameter_value(cleaned[col_idx])
                                         else:
                                             # Fallback to using the fiber count itself for logical parameters
                                             if 'fibres per tube' in parameter_name.lower() or 'fibers per tube' in parameter_name.lower():
                                                 parameter_value = fiber_count.replace('F', '')
                                             else:
-                                                parameter_value = cleaned[1] if len(cleaned) > 1 and cleaned[1] else ""
+                                                parameter_value = clean_parameter_value(cleaned[1]) if len(cleaned) > 1 and cleaned[1] else ""
                                     else:
                                         # No column mapping, use default logic
                                         if 'fibres per tube' in parameter_name.lower() or 'fibers per tube' in parameter_name.lower():
                                             parameter_value = fiber_count.replace('F', '')
                                         else:
-                                            parameter_value = cleaned[1] if len(cleaned) > 1 and cleaned[1] else ""
+                                            parameter_value = clean_parameter_value(cleaned[1]) if len(cleaned) > 1 and cleaned[1] else ""
                                     
                                     fibre_data[fiber_count]["Technical_Specifications"][current_section][parameter_name] = parameter_value
                                 
@@ -803,7 +848,7 @@ def extract_grouped_data(pdf_path):
                                             if fc in extract_grouped_data.column_mappings:
                                                 col_idx = extract_grouped_data.column_mappings[fc]['column']
                                                 if col_idx < len(cleaned):
-                                                    specific_value = cleaned[col_idx] if cleaned[col_idx] else parameter_value
+                                                    specific_value = clean_parameter_value(cleaned[col_idx]) if cleaned[col_idx] else clean_parameter_value(parameter_value)
                                                     
                                                     if parameter_section not in fibre_data[fc]["Technical_Specifications"]:
                                                         fibre_data[fc]["Technical_Specifications"][parameter_section] = {}
@@ -812,7 +857,7 @@ def extract_grouped_data(pdf_path):
                                                 # No specific column mapping, use shared value
                                                 if parameter_section not in fibre_data[fc]["Technical_Specifications"]:
                                                     fibre_data[fc]["Technical_Specifications"][parameter_section] = {}
-                                                fibre_data[fc]["Technical_Specifications"][parameter_section][parameter_name] = parameter_value
+                                                fibre_data[fc]["Technical_Specifications"][parameter_section][parameter_name] = clean_parameter_value(parameter_value)
                                     else:
                                         # No column mappings, assign same value to all fiber counts
                                         for fiber_count in detected_fiber_counts:
@@ -836,7 +881,7 @@ def extract_grouped_data(pdf_path):
                                                     section_data[parameter_name] = parameter_value
                                                 else:
                                                     section_data = fibre_data[fiber_count]["Technical_Specifications"].setdefault(parameter_section, {})
-                                                    section_data[parameter_name] = parameter_value
+                                                    section_data[parameter_name] = clean_parameter_value(parameter_value)
                                                     
                                                 # Remove from incorrect sections if present
                                                 for wrong_section in existing_sections:
