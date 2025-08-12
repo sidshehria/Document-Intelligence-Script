@@ -636,7 +636,7 @@ def extract_grouped_data(pdf_path):
                             
                             # Normalize parameter name to prevent duplicates
                             def normalize_parameter_name(name):
-                                """Normalize parameter names to prevent duplicate keys"""
+                                """Normalize parameter names to prevent duplicate keys."""
                                 if not name:
                                     return name
                                 
@@ -746,7 +746,7 @@ def extract_grouped_data(pdf_path):
                                     
                                     fibre_data[fiber_count]["Technical_Specifications"][current_section][parameter_name] = parameter_value
                                 
-                                continue  # Skip the general parameter handling below
+                                continue  # Skip the general parameter handaling below.
                             
                             # General parameter handling for parameters that don't need fiber-specific columns
                             else:
@@ -768,7 +768,7 @@ def extract_grouped_data(pdf_path):
                                 if fiber_columns and fiber_count in fiber_columns:
                                     col_idx = fiber_columns[fiber_count]
                                     # Look for the parameter value in the next row or same row after the header
-                                    # This is a header row, so skip parameter extraction for now
+                                    # This is a header row, so skip parameter extraction for now 
                                     if any(fc in cleaned for fc in detected_fiber_counts):
                                         continue
                                 
@@ -865,7 +865,7 @@ def extract_grouped_data(pdf_path):
                                     # Store column mappings for future use
                                     # Store column mappings for future use
                                     global COLUMN_MAPPINGS
-                                    COLUMN_MAPPINGS = local_fiber_values
+                                    COLUMN_MAPPINGS = local_fiber_values 
                                     
                                     # For fiber count parameter, assign the correct values
                                     if any(fc_word in parameter_name.lower() for fc_word in ['fibre count', 'fiber count']):
