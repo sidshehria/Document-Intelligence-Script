@@ -1,8 +1,19 @@
+# Endpoint to list all JSON files and their contents from output_json directory
+import glob
+
+
+# type: ignore
+# pylint: skip-file
+
 import os
 import json
 import uuid
+import tempfile
 import pdfplumber
 import re
+from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from config_parameters import (
     SECTION_KEYWORDS, FIBER_COUNT_PATTERNS, PARAMETER_CATEGORIES, COLOR_CODES,
     TEXT_PARAMETER_PATTERNS, FIBER_COUNT_TEXT_PATTERNS, VALID_FIBER_COUNTS,
@@ -10,10 +21,41 @@ from config_parameters import (
     get_all_text_patterns, add_parameter_if_new, param_manager, ensure_parameter_exists
 )
 
-# Configuration
-INPUT_FOLDER = "input_docs"
-OUTPUT_FOLDER = "output_json"
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+# FastAPI app setup
+app = FastAPI()
+
+@app.get("/api/json-files")
+async def list_json_files():
+    import os
+    import json
+    output_dir = os.path.join(os.path.dirname(__file__), "output_json")
+    files = glob.glob(os.path.join(output_dir, "*.json"))
+    result = []
+    for file_path in files:
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = json.load(f)
+            result.append({
+                "filename": os.path.basename(file_path),
+                "content": content
+            })
+        except Exception as e:
+            result.append({
+                "filename": os.path.basename(file_path),
+                "error": str(e)
+            })
+    return result
+# Configure CORS for Angular 13 frontend (e.g., http://localhost:4200)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:4200"],  # Update with your Angular app URL
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+  
+# Global column mappings storage to avoid attaching attributes to functions
+COLUMN_MAPPINGS: dict = {}
 
 def clean_parameter_value(value):
     """Clean parameter values by removing IEC standard codes and extra whitespace"""
@@ -422,7 +464,8 @@ def extract_grouped_data(pdf_path):
                         # Extract color coding separately for each fiber count
                         for fiber_count in detected_fiber_counts:
                             # Extract numeric value from fiber count (e.g., "24F" -> 24, "12F" -> 12)
-                            numeric_count = int(re.search(r'(\d+)', fiber_count).group(1)) if re.search(r'(\d+)', fiber_count) else 0
+                            match = re.search(r'(\d+)', fiber_count)
+                            numeric_count = int(match.group(1)) if match and match.group(1).isdigit() else 0
                             
                             # Extract color coding limited to this specific fiber count
                             color_coding = extract_color_coding_from_text(page_text, numeric_count)
@@ -820,9 +863,9 @@ def extract_grouped_data(pdf_path):
                                 # If we found column mappings, use them for subsequent parameter extraction
                                 if local_fiber_values:
                                     # Store column mappings for future use
-                                    if not hasattr(extract_grouped_data, 'column_mappings'):
-                                        extract_grouped_data.column_mappings = {}
-                                    extract_grouped_data.column_mappings = local_fiber_values
+                                    # Store column mappings for future use
+                                    global COLUMN_MAPPINGS
+                                    COLUMN_MAPPINGS = local_fiber_values
                                     
                                     # For fiber count parameter, assign the correct values
                                     if any(fc_word in parameter_name.lower() for fc_word in ['fibre count', 'fiber count']):
@@ -835,7 +878,8 @@ def extract_grouped_data(pdf_path):
                                         continue
                                 else:
                                     # Check if we have column mappings from a previous header row
-                                    if hasattr(extract_grouped_data, 'column_mappings') and extract_grouped_data.column_mappings:
+                                    # Use existing global column mappings if available
+                                    if COLUMN_MAPPINGS:
                                         # Extract fiber-specific values based on column mappings
                                         for fc in detected_fiber_counts:
                                             # Skip color-related parameters to avoid overriding tabular color extraction
@@ -845,8 +889,8 @@ def extract_grouped_data(pdf_path):
                                             # Use enhanced parameter categorization
                                             parameter_section = ensure_parameter_exists(parameter_name, parameter_value)
                                             
-                                            if fc in extract_grouped_data.column_mappings:
-                                                col_idx = extract_grouped_data.column_mappings[fc]['column']
+                                            if fc in COLUMN_MAPPINGS:
+                                                col_idx = COLUMN_MAPPINGS[fc]['column']
                                                 if col_idx < len(cleaned):
                                                     specific_value = clean_parameter_value(cleaned[col_idx]) if cleaned[col_idx] else clean_parameter_value(parameter_value)
                                                     
@@ -933,59 +977,95 @@ def extract_grouped_data(pdf_path):
         print(f"[ERROR] Failed to process PDF {pdf_path}: {str(e)}")
         return {}, []
 
-def process_all_pdfs(folder_path):
-    """Process all PDF files and create individual JSON files for each fiber count"""
-    total_files_processed = 0
-    
-    for root, _, files in os.walk(folder_path):
-        for file in files:
-            if file.lower().endswith(".pdf"):
-                file_path = os.path.join(root, file)
-                print(f"\n[INFO] Processing: {file_path}")
-                total_files_processed += 1
 
-                try:
-                    # Extract data and detect fiber counts
-                    grouped_data, detected_fiber_counts = extract_grouped_data(file_path)
-                    
-                    print(f"[INFO] Detected fiber counts: {detected_fiber_counts}")
+# --- FastAPI endpoint for PDF upload and extraction ---
+@app.post("/extract")
+async def extract_pdf(file: UploadFile = File(...)):
+    """
+    Accepts a PDF file upload, extracts fiber optic cable data, and returns JSON.
+    (MongoDB saving placeholder included for future integration.)
+    """
+    try:
+        # Save uploaded file to a temporary location (or use in-memory if possible)
+        contents = await file.read()
+        temp_dir = tempfile.gettempdir()
+        temp_path = os.path.join(temp_dir, f"{uuid.uuid4().hex}.pdf")
+        with open(temp_path, "wb") as f:
+            f.write(contents)
 
-                    for fiber_count in detected_fiber_counts:
-                        # Check if there's meaningful data for this fiber count
-                        has_table_data = any(grouped_data[fiber_count]["Technical_Specifications"].values())
-                        has_text_data = any(grouped_data[fiber_count]["Document_Text_Content"].values())
-                        
-                        if has_table_data or has_text_data:
-                            base_name = os.path.splitext(file)[0].replace(" ", "_")
-                            file_id = uuid.uuid4().hex[:6]
-                            output_filename = f"{base_name}_{fiber_count}_{file_id}.json"
-                            output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+        # Use the main extraction logic on the uploaded file
+        grouped_data, detected_fiber_counts = extract_grouped_data(temp_path)
 
-                            # Create comprehensive output structure
-                            output_json = {
-                                "metadata": {
-                                    "source_file": file,
-                                    "fiber_type": fiber_count,
-                                    "processing_date": "2025-07-18",
-                                    "detected_fiber_counts": detected_fiber_counts
-                                },
-                                "document_content": grouped_data[fiber_count]["Document_Text_Content"],
-                                "technical_specifications": grouped_data[fiber_count]["Technical_Specifications"]
-                            }
+        # Prepare output for all detected fiber counts
+        results = []
+        for fiber_count in detected_fiber_counts:
+            has_table_data = any(grouped_data[fiber_count]["Technical_Specifications"].values())
+            has_text_data = any(grouped_data[fiber_count]["Document_Text_Content"].values())
+            if has_table_data or has_text_data:
+                output_json = {
+                    "metadata": {
+                        "source_file": file.filename,
+                        "fiber_type": fiber_count,
+                        # Use current date or datetime.now() if needed
+                        "processing_date": "2025-08-11",
+                        "detected_fiber_counts": detected_fiber_counts
+                    },
+                    "document_content": grouped_data[fiber_count]["Document_Text_Content"],
+                    "technical_specifications": grouped_data[fiber_count]["Technical_Specifications"]
+                }
+                # --- Placeholder for MongoDB integration ---
+                # from pymongo import MongoClient
+                # client = MongoClient("mongodb://localhost:27017/")
+                # db = client["your_db_name"]
+                # db["your_collection_name"].insert_one(output_json)
+                results.append(output_json)
 
-                            with open(output_path, "w", encoding="utf-8") as f:
-                                json.dump(output_json, f, indent=4, ensure_ascii=False)
+        os.remove(temp_path)
+        if not results:
+            return JSONResponse(status_code=400, content={"error": "No meaningful data extracted from PDF."})
+        # Return JSON results to Angular frontend
+        return JSONResponse(status_code=200, content={"results": results})
+    except Exception as e:
+        print(f"[EXTRACT_PDF ERROR] {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
-                            print(f"[✅] Saved JSON for {fiber_count}: {output_filename}")
-                        else:
-                            print(f"[⚠️] No meaningful data found for {fiber_count} in {file}")
-                
-                except Exception as e:
-                    print(f"[❌] Error processing {file}: {str(e)}")
-    
-    print(f"\n[INFO] Total files processed: {total_files_processed}")
 
-if __name__ == "__main__":
-    print("Starting PDF processing for fiber optic cable specifications...")
-    process_all_pdfs(INPUT_FOLDER)
-    print("Processing completed!")
+
+# Serve Angular 13 production build (update path to your build folder)
+from fastapi.staticfiles import StaticFiles
+import pathlib
+
+# Path to Angular build output
+angular_dist = pathlib.Path(__file__).parent / "salesaidocumentation" / "dist"
+# Find the actual app folder inside dist (since Angular 13 outputs dist/<app-name>)
+if angular_dist.exists():
+    for sub in angular_dist.iterdir():
+        if sub.is_dir():
+            app_dist = sub
+            break
+    else:
+        app_dist = angular_dist
+    app.mount("/", StaticFiles(directory=str(app_dist), html=True), name="frontend")
+
+# To run locally: uvicorn main:app --reload
+
+# Alias /api/upload to /extract for Angular proxy
+from fastapi import Request
+@app.post("/api/upload")
+async def api_upload_proxy(request: Request):
+    print("UPLOAD ENDPOINT HIT")
+    try:
+        form = await request.form()
+        print("FORM RECEIVED:", form)
+        file = form["file"]
+        print("FILE RECEIVED:", file)
+        result = await extract_pdf(file)
+        print("EXTRACT_PDF RESULT:", result)
+        return result
+    except Exception as e:
+        print(f"[UPLOAD ENDPOINT ERROR] {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})

@@ -1,4 +1,4 @@
-# Exclude input documents and output JSON files
+# Ignore input and output documents
 input_docs/
 output_json/
 
@@ -11,9 +11,15 @@ __pycache__/
 *.so
 
 # Virtual environment
+.venv/
 venv/
-env/
 ENV/
+
+# Node modules
+node_modules/
+
+# Angular build output
+dist/
 
 # IDE files
 .vscode/
@@ -24,3 +30,9 @@ ENV/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Ignore PDFs in Angular assets
+salesaidocumentation/src/assets/pdf/
+
+# Ignore server uploads/json folder
+salesaidocumentation/server/uploads/json/
